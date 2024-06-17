@@ -12,12 +12,17 @@ const pool = mysql.createPool({
 
 module.exports = pool.promise();
 
-
 const express = require('express');
 const multer = require('multer');
 const xlsx = require('xlsx');
 const db = require('./db');
 const cors = require('cors');
+const userRoutes = require('./userRoutes');
+const { authenticateToken, authorizeRole } = require('./middleware');
+const authRoutes = require('./routes/auth');
+const sequelize = require('./config/database');
+require('dotenv').config();
+const { protect } = require('./middleware');
 
 const app = express();
 const port = 5000;
@@ -28,7 +33,10 @@ app.use(express.json());
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
-app.post('/upload', upload.single('file'), async (req, res) => {
+app.use('/api/users', userRoutes);
+
+// Protected route for uploading files
+app.post('/upload', authenticateToken, authorizeRole(['uploader']), upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
     const workbook = xlsx.read(file.buffer, { type: 'buffer' });
@@ -45,7 +53,8 @@ app.post('/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-app.get('/download/:id', async (req, res) => {
+// Protected route for downloading files
+app.get('/download/:id', authenticateToken, authorizeRole(['downloader']), async (req, res) => {
   try {
     const fileId = req.params.id;
     const [rows] = await db.query('SELECT * FROM files WHERE id = ?', [fileId]);
@@ -72,3 +81,4 @@ app.get('/download/:id', async (req, res) => {
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
+
